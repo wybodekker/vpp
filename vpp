@@ -1,0 +1,1005 @@
+#!/bin/bash
+Version=3.08
+Myname="${0##*/}"
+
+:<<'DOC'
+= vpp - View and (selectively) Print PDF and PostScript
+
+= Synopsis
+vpp [options] [file]	
+
+Options:
+-h,--help		print a help message and exit
+-H,--Help		print print full documentation via less and exit
+-V,--version		print version and exit
+-b,--batch=STR		run in batch after running commands in STR
+   --view		view the document (this is the default)
+   --noview		do not view the document
+   --viewer=KEY		use pdf viewer named KEY
+   --print		offer printing interaction (this is the default)
+   --noprint		do not offer printing interaction
+-p,--printer=KEY	print to printer named KEY
+-v,--verbose		be verbose
+   --noverbose		don’t be verbose (this is the default)
+-r,--rc[=STR]		use STRING as an rc file; if STR is absent, 
+			don’t read any rc file
+
+Arguments for short options are given without a separator, so you can write
+either |--rc=myrc| or |-rmyrc|.
+
+= Description
+vpp is a Bash script that displays a PDF or PostScript document (after
+conversion to PDF). The user can use the viewer to print the document or,
+alternatively, leave the viewer and use vpp’s facilities to print selected
+pages to a one- or two-sided hardcopy or an A5-booklet: see the section
+/Page selection and other commands/ for the details. Instead of printing your
+selections, you can also save them into PDF files.
+
+If |file| is specified with a |.ps| or a |.pdf| extension, vpp will simply use
+that |file|. Otherwise, vpp will look for |file.pdf|, |file.ps|, and |file|, in
+that order, and will use the first existing file. If |file| lacks, standard
+input is used.
+
+In any case, the first few characters /in/ the file determine whether it is
+treated as a PDF or as a PostScript file.
+
+vpp needs a viewer and a printer; see the section /Printers and viewers/.
+
+= Exit value
+
+vpp has four possible exit values:
+
+0	OK
+1	error
+2	edit, which is a signal to the calling program that a new
+	edit session is at order; this is used by |mk|.
+3	re-compile; this is used by |mk|
+
+= Dependencies
+
+kpsewhich	from texlive
+pdflatex	from texlive
+pdfpages.sty	from texlive
+pdfinfo		from poppler-utils
+ps2pdf		from ghostscript
+texi2dvi	> 6289	[Texinfo](ftp.gnu.org/gnu/texinfo/texi2dvi)
+getopt		from util-linux
+lpr		from cups-bsd
+lpoptions	from cups-client
+lpstat		from cups-client
+texlog_extract	from texlive
+
+= Printers and viewers
+For the operation of vpp, availability of printers and pdf viewers is important.
+Therefore, two associative arrays are defined:
+printers	an array available printers, where the keys are printer names
+		and the values are |true| or |false|, depending on whether the
+		printer can print double sided (true) or not (false).
+		
+viewers		an array of available viewers, where the keys are viewer names
+		and the values are the corresponding commands, with arguments if any.
+
+For each array, an index is set: |printer| for the printers array. |viewer| for
+the viewers array. |printer| points to the current printer, |viewer| to the
+current viewer.
+
+You can inspect the contents of these arrays either with the short help option
+(|-h| or |--help|) or, when you are in vpp's command mode, with the |?| command.
+
+The |printers| array is automatically filled, using the |lpstat| and
+|lpoptions| commands.
+
+The |viewers| array can be set in several ways:
+
+- It is initially set to:
+  
+     viewers=([xp]=xpdf [ev]=evince [gv]=gv [ac]=acroread)
+  
+  but after that, unavailable viewers are silently removed. This may result in
+  an empty list.
+  
+- After this, an rc file may be available, either in the form of |~/.vpprc| or specified
+  with the |--rc| option. 
+  
+- the |--viewer| option may specify a viewer.
+  
+- Finally, a viewer may be specified on-the-fly, with the |v| command (see the 
+  section on /Page selection and other commands/.
+
+= Options
+
+vpp comes with several options. Before evaluating any options, vpp will try to
+read the user rc-file, |~/.vpprc|, where you can set defaults for most options,
+by assigning values to variable named after the long form of the options. For
+example, there are three ways to select the printer named /k550/:
+
+- use the option |--printer=k550|.
+- enter a line with |printer=k550| in your rc file (|~/.vpprc|, for example).
+- in command mode, enter |pk550|.
+
+These are the variables that can be set in |~/.vpprc|:
+batch		(string) sets the |--batch| option
+print		(true or false) sets printing interaction on or off
+printer		(string) sets the |--printer| option
+verbose		(true or false) sets the |--verbose| option
+view		(true or false) sets viewing on or off
+viewer		(string) set the viewer; arguments may be added; example:
+	
+		   viewer='acroread -geometry 1450x1150+0+0'
+	
+		You should use a basename here, that is: the name of the viewer
+		should contain no slashes, and it should be in your PATH.
+
+--help	
+	Prints synopsis and available printers and viewers, then quits.
+--Help	
+	Prints this documentation, /via/ less.
+--version	
+	Prints version, then quits.
+--verbose	
+	Prints messages about the progress vpp is making. Can be reverted
+	with |--noverbose|.
+--rc=rc-file	
+	Read the specified |rc-file|, instead of the default rc-file, |~/.vpprc|.
+	If this option is used, it must be used before any other options.
+	If |rc-file| is an empty string, no rc-file will be read, thus skipping
+	reading of |~/.vpprc|.
+--batch=string	
+	Prevents the --print option to interrogate the user about pages to
+	be printed. Instead the document is printed according to the commands
+	in the mandatory |string|. Also sets viewing off. Thus the command
+	
+	   vpp --batch '2-3 x3' test.pdf
+	
+	prints 3 copies of pages 2 and 3 of |test.pdf| without interaction
+--print	
+	Present the print prompt. This is the default. Can be reverted with
+	|--noprint|, normally used to suppress the print prompt, for
+	example when using vpp from other scripts that generate PDF or
+	PostScript documents that have only to be displayed or printed
+	without even being displayed.
+--view	
+	Run the file viewer. This is the default. Can be reverted with
+	|--noview|, normally used to suppress starting the viewer, for
+	example when using vpp from other scripts that generate PDF or
+	PostScript documents that have only to be printed.
+--printer=key	
+	Specifies the printer to be used instead of the system default
+	printer. See the section /Printers and viewers/ for more information.
+--viewer=[key|command]	
+	Specifies the viewer to use. This script defines an associative
+	array |viewers| containing 4 viewers as follows:
+	
+	   viewers=([xp]=xpdf [ev]=evince [gv]=gv [ac]=acroread)
+	
+	and the viewer is set to xp by default. However, you can define
+	your own set of viewers in the |~/.vpprc| file or in any rc file
+	given with the |--rc| option. For example:
+	   viewers=(
+	      [xp]='xpdf -g 970x1050+0+0 -font 8x13bold -z page -cont'
+	      [ac]='acroread -geometry 850x890+0+0'
+	      [ev]='evince --fullscreen --presentation'
+	    )
+	    viewer=xp
+
+= Page selection and other commands
+
+When you select the |--print| option, and you did not also use the |--batch|
+option, vpp interrogates you about the pages you want to print. To that end the
+following prompt appears:
+
+    vpp command (? for help):
+
+upon typing |?| or |h|, vpp displays examples of possible commands:
+
+  Command Examples:
+    5       to print page 5
+    5-      to print pages 5 through the end
+    5-7     to print pages 5, 6 and 7
+    7-5 ox  write the same pages, in reversed order, to x.pdf
+    -7      to print the first 7 pages
+    5-7 19- to print pages 5, 6, 7 and 19 through the end
+    a       to print the whole document
+    -       to print the whole document
+    a x3    to print 3 copies of the document
+    x3      the same
+    5 x3    to print 3 copies of page 5
+    t       print the whole document twosided
+    t 2-    print twosided starting at page 2
+    b       to print the whole document as an a5 size booklet
+    b -12   to print the first 12 pages as an a5 size booklet
+  Other commands:
+    e       (if called by mk) edit the tex source and rerun mk
+    c       (if called by mk) rerun mk
+    v       (re)view the ps/pdf file or, with an argument, specify a viewer.
+    w       list errors and warnings from the log file
+    oxyz    send pdf output to file xyz.pdf instead of printer
+    pxyz    print to printer xyz
+    h       display this help
+    ?       display this help
+    q       quit
+
+Sub-commands are separated with spaces or commas, so you can write either
+|5-7 19 ox| or |5-7,19 ox| or |5-7,19,ox| see the section /Examples/.
+With these descriptions, no further explanation should be necessary, except for
+the following:
+
+When twosided (|t|) or booklet (|b|) printing is selected for a non-duplex
+printer, printing will be performed in two shifts, one for the front side and
+one for the backside. Between the shifts, another prompt appears:
+
+   printer ready? then turn stack and type return
+
+You will have to arrange your printer such that, with the printed sides up, the
+first page printed will be at the bottom of the stack, and the last page printed
+will be on top. Normally you will then have your output come out the back of
+your printer. /Turn the stack/ then means: rotate it over the long side of the
+paper and feed it back into the printer for the other side to be printed.
+
+When you use the |oxyz| subcommand, your selection will not be printed but
+instead will be saved in a PDF file named |xyz.pdf|. When you use a |t| or |b|
+selection, you will not, of course, be prompted to turn the paper stack.
+Instead, the odd and even pages of your selection will be saved in separate PDF
+files, |xyz_odd.pdf| and |xyz_even.pdf|.
+
+= Environment
+Two environment variables may be useful in scripts using vpp:
+VPPOUTDIR	The directory where PDF files generated with the o command will
+		be saved; the default is the working directory.
+VPPCHECKSAVED	If non-empty, vpp will check on exit that the inspected file
+		has been saved into a pdf file and will issue a warning if it hasn’t.
+		Useful if input is from standard input or a temporary file.
+
+= Examples
+
+Since vpp can read from standard input, it can be used to print (parts of)
+manpages. This example (we assume a printer which cannot print double
+sided) prints the full |ls| manpage first, followed by an A5 booklet of the
+first 8 pages:
+
+    $ man -t ls | vpp # (shows preview and is left with q)
+    vpp command (? for help): a
+    vpp command (? for help): b 1-8
+    printer ready? then turn pack over the long side and type enter (^D skips)
+    vpp command (? for help): q
+    $
+
+If you don’t need a preview, because you have seen the man page already, you
+can print it immediately as an A5 booklet with:
+
+    $ man -t ls | vpp --batch=b
+
+or, to make an A5 booklet of the first 8 pages:
+
+    $ man -t ls |vpp --batch='-8 b'
+
+If you just want to save a PDF copy of the man page in |ls.pdf|, you can say:
+
+    $ man -t ls |vpp -bols
+
+Some PDF-documents, like the CVS manual (|cvs.pdf|), have their table of
+contents in their back instead of behind the title page. You can use vpp to
+rearrange such documents:
+
+    $ vpp --batch='1 2 153-160 3-152 ocvs' cvs.pdf
+
+This overwrites the input document. Note that any links in the file will get
+broken, so that is only useful for documents that have to be printed. It would
+have been more sensible in this case to say:
+
+    $ vpp --batch=b,1,2,153-160,3-152 cvs
+
+which prints the reordered document as an A5 booklet without replacing it.
+Note that we used comma's instead of spaces here, so we didn't need to quote
+the string.
+
+You can even print or output page ranges in reverse order:
+
+    $ vpp --batch='12-1 otest' cvs.pdf
+
+= Author
+[Wybo Dekker](wybo@dekkerdocumenten.nl)
+
+= Copyright
+Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
+DOC
+
+    die() { local i; for i; do echo -e "$Myname: $Red$i"; done 1>&2; exit 1; }
+   Warn() { local i; for i; do echo -e "$Myname: $Mag$i$Nor"; done 1>&2; }
+   warn() { $verbose && Warn "$@"; }
+helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
+helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed -n '1d;$d;p'|
+            less -Ps"$Myname-${Version/./·} documentation - type h for help, q to quit."
+		exit
+	  }
+
+:<<'DOC' #----------------------------------------------------------------------
+= excheck
+synopsis:	 excheck executable1 [executable2...]
+description:	check if all needed execs are there and getopt is GNU
+DOC
+#-------------------------------------------------------------------------------
+excheck() {
+   local ok=true i
+   ((BASH_VERSINFO>=4)) || die "Need bash version >= 4"
+   for i; do 
+      command -v "$i" > /dev/null && continue
+      Warn "Missing executable: $i"
+      ok=false
+   done
+   $ok || die
+   getopt -T 
+   [[ $? -ne 4 ]] && die "Your getopt is not GNU"
+   i=$(texi2dvi --version|head -1|tr -cd [0-9])
+   (( i >= 267 )) ||
+      die "texi2dvi version ${i#2} is too old" \
+          "get it here: ftp.gnu.org/gnu/texinfo/texi2dvi"
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= check_viewers
+description:	Check pdf viewers
+		The variable |viewer| is a key to the viewers array.
+		Test viewers for executability.
+globals  set:	 viewer
+globals used:	 viewer viewers
+DOC
+#-------------------------------------------------------------------------------
+check_viewers() {
+   local i j
+   # any viewers defined?
+   [[ ${#viewers[@]} -eq 0 ]] && die 'No viewer could be found'
+   # check if all viewers are executable
+   for i in "${!viewers[@]}"; do 
+      j="${viewers[$i]%% *}"
+      extest "$j" || die "$j is not executable or not in your PATH"
+   done
+   # has a viewer been selected?
+   if [[ -n $viewer ]]; then
+      [[ -z ${viewers[$viewer]} ]] && die "viewer $viewer is undefined"
+   else # if not defined, take a random one
+      viewer="${!viewers[*]}"
+      viewer="${viewer%% *}"
+   fi
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= extest
+synopsis:	 extest command [arg...]
+description:	test if the command is available and executable
+returns:	0 if the test is ok, 1 otherwise
+DOC
+#-------------------------------------------------------------------------------
+extest() {
+   command -v "${1%% *}" >/dev/null
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+synopsis:	 src file
+description:	source a file
+DOC
+#-------------------------------------------------------------------------------
+src() {
+   if [[ -n $1 ]]; then
+      [[ -e $1 ]] || die "rc-file $1 does not exist"
+      [[ -r $1 ]] || die "rc-file $1 is not readable"
+      # shellcheck disable=SC1090
+      source "$1"
+   fi
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= handle_options
+synopsis:	handle_options "$@"
+description:	Handles the options
+globals  set:	 batch input mk print printer rcfile verbose view viewer
+		 viewers writeto
+globals used:	 Myname Version batch viewer viewers printers
+DOC
+#-------------------------------------------------------------------------------
+shopt -s extglob
+handle_options() {
+   local options first=true
+   if ! options=$(getopt \
+      -n "$Myname" \
+      -o b:p:dr::VvhHqI \
+      -l batch:,printer:,rc::,norc,version,verbose,noverbose,view,noview,viewer:,print,noprint,help,Help,quiet,noquiet,mk: -- "$@"
+   ); then exit 1
+   fi
+   eval set -- "$options"
+   while [ $# -gt 0 ]; do
+      if $first; then
+	 first=false
+	 if [[ $1 = -r ]] || [[ $1 == --rc ]]; then # if the first option is --rc 
+            rcfile="$2"
+            shift 2
+         fi
+         src "$rcfile" # initial value is ~/.vpprc
+         find_printers # for the --printer option
+      fi
+      case $1 in
+      (-h|--help)         # print a help message and exit
+			  helpsrt
+			  ;;
+      (-H|--Help)         # print print full documentation via less and exit
+			  helpall
+			  ;;
+      (-V|--version)      # print version and exit
+			  echo $Version
+			  exit
+			  ;;
+      (-b|--batch)        # run in batch using argument for print command
+			  batch="$2"
+			  shift 2
+			  ;;
+      (   --view)         # view the document (this is the default)
+			  view=true
+			  shift
+			  ;;
+      (   --noview)       # do not view the document
+			  view=false
+			  shift
+			  ;;
+      (   --viewer)       # specifies the pdf viewer to use
+			  viewer="${2%% *}" # remove any viewer arguments
+			  extest "$viewer" ||
+			     die "specified viewer $viewer is not available"
+			  viewers[$viewer]="$2"
+			  shift 2
+			  ;;
+      (   --print)        # offer printing interaction (this is the default)
+			  print=true
+			  shift
+			  ;;
+      (   --noprint)      # do not offer printing interaction
+			  print=false
+			  shift
+			  ;;
+      (-p|--printer)      # print to named printer
+			  [[ -n ${printers["$2"]} ]] ||
+			     die "specified printer ($2) does not exist"
+			  printer="$2"
+			  shift 2
+			  ;;
+      (-v|--verbose)      # be verbose
+			  verbose=true
+			  shift
+			  ;;
+      (   --noverbose)    # don’t be verbose (this is the default)
+			  verbose=false
+			  shift
+			  ;;
+      (-r|--rc)		  # set rc file, but this must be the first option!
+			  die 'the --rc option must be used before any other options'
+			  ;;
+      (   --mk)           read -r -d '' mk <<-'EOD'
+			===e         edit the tex source and rerun mk
+			===c         rerun mk with forced compilation
+			EOD
+			  mk="\n${mk//=/  }"
+			  writeto="$2"
+			  shift 2
+			  ;;
+      (-I)		  instscript "$0" ||
+			     die 'the -I option is for developers only'
+			  exit
+			  ;;
+      (--)                shift
+			  break
+			  ;;
+      (*)                 break
+			  ;;
+      esac
+   done
+   (( $# > 1)) && die "expecting zero or one input files, not $#"
+   input=${1%.} # remove final . (may be there by auto completion)
+   [[ -n $batch ]] && view=false
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= find_pdf
+description:	Find the input and provide a pdf-copy;
+		If vpp had no file argument, standard input is used.
+		If the argument has one of the extensions .pdf, .ps or .eps, or
+		any uppercase variant, that file is used.
+		Any other argument is used as such, if the file exists or, if not,
+		a .pdf, PDF, PS, .ps, .eps or .EPS extension is added and the
+		first existing file is used.
+globals  set:	 log tempdir
+globals used:	 input tempdir
+DOC
+
+#-------------------------------------------------------------------------------
+find_pdf() {
+   local tempdir
+   tempdir=$(mktemp -d -t vpp.XXXXXXXXXX)
+   # shellcheck disable=SC2064
+   trap "rm -rf $tempdir" 0 1 2 15
+   warn "running in temporary directory $tempdir"
+   shopt -s nocasematch
+   if [[ -z $input ]]; then
+      warn 'using standard input'
+      cat - > "$tempdir/main"
+      exec 0>&-
+      exec 0</dev/tty
+   elif [[ $input =~ \.(pdf|ps|eps)$ ]]; then
+      [[ -e $input ]] || die "$input: not found"
+      [[ -s $input ]] || die "$input: empty"
+      [[ -r $input ]] || die "$input: not readable"
+      cat "$input" > "$tempdir/main"
+      warn "using $input"
+      log=$(realpath -m "${input%.pdf}.log")
+   else
+      local i found=false
+      for i in $input.{pdf,PDF,ps,PS,eps,EPS} $input; do
+	 if [[ -e $i ]]; then
+	    found=true
+	    break
+	 fi
+      done
+      $found || die "$input: not found; I tried $input.{pdf,PDF,ps,PS,eps,EPS} and $input"
+      [[ -s $i ]] || die "$i: empty file"
+      cat "$i" > "$tempdir/main"
+   fi
+   shopt -u nocasematch
+   cd "$tempdir" || exit 1
+   local typ
+   typ=$(file -b main)
+   typ=${typ%% *}
+   case $typ in
+   (PDF) 	mv main main.pdf;;
+   (PostScript)	ps2pdf main main.pdf; rm main;;
+   (empty)	die 'file is empty';;
+   (*) die "Input is neither PDF nor PostScript; file says: $typ"
+   esac
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= pdfproperties
+description:	Find page width, page height and the number of pages in the
+		input file
+globals  set:	 height pagecount width
+globals used:	 height pagecount width
+DOC
+#-------------------------------------------------------------------------------
+pdfproperties() {
+   while true; do 
+      [[ $x =~ ^PDF ]] && break
+      [[ $x =~ ^Pages:\ *([0-9]*) ]] && pagecount="${BASH_REMATCH[1]}"
+      [[ $x =~ ^Page\ size:\ *([0-9]*)(\.[0-9]*)?\ *x\ *([0-9]*)(\.[0-9]*)? ]] && {
+	   width=$(printf '%0.0f' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}")
+	  height=$(printf '%0.0f' "${BASH_REMATCH[3]}${BASH_REMATCH[4]}")
+      }
+      read -r x
+   done < <(pdfinfo main.pdf)
+   warn "$pagecount pages, papersize $width x $height"
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= printhelp
+description:	Print help for vpp-commands and show which viewer and printer
+		are active.
+globals used:	 Blu Nor mk batch
+DOC
+#-------------------------------------------------------------------------------
+printhelp() {
+   echo -ne "
+   ${Blu}Command Examples:$Nor
+      5         to print page 5
+      5-        to print pages 5 through the end
+      5-7       to print pages 5, 6 and 7
+      7-5 ox    write pages 7, 6 and 5, in that order, to x.pdf
+      -7        to print the first 7 pages
+      5-7 19-   to print pages 5, 6, 7 and 19 through the end
+      a         to print the whole document
+      -         to print the whole document
+      a x3      to print 3 copies of the document
+      x3        the same
+      5 x3      to print 3 copies of page 5
+      t         print the whole document twosided
+      t 2-      print twosided starting at page 2
+      b         to print the whole document as an a5 size booklet
+      b -12     to print the first 12 pages as an a5 size booklet
+   ${Blu}Other commands:$Nor$mk
+      v         (re)view the ps/pdf file
+      w         list errors and warnings from the log file
+      oxyz      send pdf output to file xyz.pdf instead of printer
+      pxyz      print to printer xyz
+      h         display this help
+      ?         display this help
+      q         quit
+   $(list_printers)
+   $(list_viewers)\\n" |sed 's/   //'
+   [[ -n $batch ]] && exit
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= ask_selection
+synopsis:	 ask_selection [arg...]
+description:	Interact with user, specifying pages to be printed or exported
+		as pdf, or to re-view the pdf or (if called from mk) re-edit the
+		tex-source. If called with arguments (caused by vpp’s |--batch|
+		option) executes those.
+globals  set:	 booklet com lpropt output printer saved selection twosideds
+		 viewer
+globals used:	 Mag Myname Nor Red VPPCHECKSAVED batch booklet com compileexit
+		 editexit log output pagecount printers saved selection twosided
+		 viewer viewers
+DOC
+#-------------------------------------------------------------------------------
+ask_selection() {
+   trap 'echo; Warn "exit with q command"; selection="continue"; return' 2
+   read -ra com <<<"${@}"
+   if [[ ${#com[@]} -eq 0 ]]; then
+      read -r -e -p "$prompt" com </dev/tty
+      history -s -- "$com"
+      read -ra com <<<"${com//,/ }"
+   fi
+   if [[ ${#com[@]} -eq 0 ]]; then
+      selection='continue'
+      return
+   fi
+   output='' booklet=false twosided=false selection='' lpropt=''
+   while [[ ${#com[@]} -gt 0 ]]; do
+      local c=${com[0]}
+      com=("${com[@]:1}")
+      case $c in
+      (q) # drop on q
+	 # useful if vpp is used to print or copy data from a scanner:
+	 test -n "$VPPCHECKSAVED" && ! $saved && {
+	    echo -e "${Red}You requested saving but did not use the o command"\
+		    "\nAnother q will destroy your copy$Nor"
+	    saved=true
+	    selection='continue'
+	    return
+	 }
+	 exit 0
+	 ;;
+      (e) # edit request for caller
+	 exit "$editexit"
+	 ;;
+      (c) # re-compile request for caller
+	 exit "$compileexit"
+	 ;;
+      (v) # (re)view the ps/pdf data
+         run_viewer
+	 selection='continue'
+	 return
+	 ;;
+      (x[1-9]*([0-9])) # x3 -> -#3
+	 lpropt=${c/x/-#}
+	 ;;
+      (o*) # output to file instead of printer
+	 output=${c#o}
+	 if [[ -z $output ]]; then
+	    Warn 'filename must follow o without spacing'
+	    selection='continue'
+	    return
+	 fi
+	 [[ $output =~ ^/ ]] || output="$writeto/$output"
+	 if [[ ! -w ${output%/*} ]]; then
+	    Warn "Cannot write to $output"
+	    selection='continue'
+	    return
+	 fi
+	 saved=true
+	 ;;
+      (p*) # set printer
+	 i=${c#p}
+	 if [[ -z $i ]]; then
+	    Warn 'p must be followed by a printer name, without spacing'
+	 elif [[ -z ${printers[$i]} ]]; then
+	    Warn "printer $i does not exist"
+	 else
+	    printer=$i
+	 fi
+	 if [[ ${#com[@]} -eq 0 ]]; then
+	    selection='continue'
+	    return
+	 fi
+	 ;;
+      (v*) # with argument, set viewer; without: run it
+	 local i=${c#v}
+	 if [[ -z ${viewers[$i]} ]]; then
+	    Warn "viewer $i not found in ~/.vpprc"
+	 else
+	    viewer=$i
+	 fi
+	 selection='continue'
+	 return
+	 ;;
+      (b) booklet=true;;          		   # print a5 booklet
+      (t) twosided=true;;         		   # print twosided
+      (a) selection+=1-$pagecount,;;		   # print all
+      (-) selection+=1-$pagecount,;;		   # print all
+      ([1-9]*([0-9])) selection+=$c,;;		   # print page n
+      ([1-9]*([0-9])-) selection+=$c$pagecount,;;  # print page n-last
+      (-[1-9]*([0-9])) selection+=1$c,;;	   # print page 1-n	
+      ([1-9]*([0-9])-[1-9]*([0-9]))		   # print page m-n
+	 selection+=$c,
+	 ;;
+      (\?|h) printhelp
+	 selection='continue'
+	 return
+	 ;;
+      (w) # show tex warning and error messages in log file
+	 if [[ -s "$log" ]]; then
+	    texlog_extract "$log"
+	 else
+	    Warn 'No log file available'
+	 fi
+	 selection='continue'
+	 return
+	 ;;
+      (*) local e="Unrecognized command «$c»$Nor"
+	 if [[ -n $batch ]]; then 
+	    die "$e"
+	 else
+	    Warn "$e - try again"
+	    selection='continue'
+	    return
+	 fi
+      esac
+   done
+   selection=${selection%,}
+   : ${selection:=1-$pagecount}
+
+   # pages in range?
+   if [[ ! $selection =~ ^[-1-9] ]]; then
+      Warn 'page selection must start with a minus sign or a digit between 1 and 9'
+      selection='continue'
+   else
+      while read -r i; do
+	 ((i>=1 && i<=pagecount)) && continue
+	 Warn "Illegal page number$Nor $i: PDF has $pagecount pages"
+	 selection='continue'
+      done <<<"${selection//+([,-])/$'\n'}"
+   fi
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= wait_for_printer
+description:	Wait for user typing |enter|, signalling that the printer is
+		ready for next job. |^D| instead skips further output.
+returns:	0
+DOC
+#-------------------------------------------------------------------------------
+wait_for_printer() {
+   echo -n 'printer ready? then turn pack over the long side and' \
+	   'type enter (^D skips) '
+   read -r </dev/tty || exit 0
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= printout
+description:	Print selected pages or output them to pdf.
+		Calls doselection for the actual output.
+globals  set:	 selection
+globals used:	 batch booklet output printer printers selection twosided
+		 writeto 
+DOC
+#-------------------------------------------------------------------------------
+printout() {
+   while true; do
+      ask_selection "${batch//,/ }"
+      [[ $selection == continue ]] && continue
+      [[ -z $selection ]] && selection=-
+
+      if ${printers[$printer]}; then
+	 doselection ''
+      else
+	 if $booklet; then
+	    doselection odd
+	    [[ -n $output ]] || wait_for_printer
+	    doselection even
+	 elif $twosided; then
+	    doselection odd
+	    [[ -n $output ]] || wait_for_printer
+	    doselection even
+	 else
+	    doselection ''
+	 fi
+      fi
+      [[ -n $batch ]] && break
+   done
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= doselection
+synopsis:	 doselection [odd|even]
+		no argument: if all pages,
+		odd if only the odd pages,
+		even if only the even pages to be printed
+description:	Make a selection of pdf pages and print it or output it to
+		pdf file.
+globals  set:	 LATEX selection
+globals used:	 Mag Nor Red booklet height lpr lpropt output printer
+		 selection verbose width
+DOC
+#-------------------------------------------------------------------------------
+doselection() {
+   local includeopt pagesel evenodd=$1 outpdf i
+   $booklet && includeopt=', booklet, landscape'
+   [[ -n $evenodd ]] && pagesel="\\usepackage[$evenodd]{pagesel}"
+   outpdf=vpp.pdf
+   # if the whole document is selected, without booklet or
+   # twosided printing, we can simply print the original pdf or,
+   # if a copy is requested with the o command, copy it to the
+   # new pdf, saving link information which is lost otherwise:
+   if [[ $includeopt$pagesel$selection != - ]]; then
+      # a selection of pages needed or pages need to be arranged to a booklet
+      # a twosided print:
+      echo '%!pdflatex
+	    \documentclass{article}
+	    \usepackage[papersize={'"$width"'bp,'"$height"'bp}]{geometry}
+	    '"$pagesel"' % require *before* pdfpages
+	    \usepackage{pdfpages}[2004/03/27]
+	    \begin{document}
+	    \includepdf[pages={'$selection'}'"$includeopt"']{main.pdf}
+	    \end{document}
+      ' > vpp.tex
+      export LATEX='pdflatex -interaction=batchmode'
+      $verbose && i='' || i=-q
+      texi2dvi -p $i vpp.tex || die "${Red}Error running texi2dvi"
+   else
+      # all pages needed without rearrangement:
+      outpdf=main.pdf
+   fi
+   if [[ -n $output ]]; then
+      # An output pdf was specified with the o command:
+      if [[ -e $output.pdf ]]; then
+	 # specified file exists; overwrite it?
+	 echo -ne "${Mag}File $output.pdf exists$Nor - overwrite? (yN) "
+	 read -r i </dev/tty
+	 if [[ ! $i =~ y ]]; then
+	    selection='continue'
+	    return
+	 fi
+      fi
+      # eventually, append _even or _odd to the pdf’s filename:
+      [[ -n $evenodd ]] && output+=_$evenodd
+      warn "copying $outpdf to $output"
+      mv "$outpdf" "$output.pdf"
+   else
+     if [[ -n $printer ]]; then i=-P; else i=''; fi
+     local command="$lpr $i$printer $lpropt $outpdf"
+     warn "running: $command"
+     $command
+   fi
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= find_printers
+description:	Use |lpstat| to find any printers defined; 
+		use |lpoptions| to detect if each printer is doublesided; 
+		create associative array |printers| with printer names as keys
+		and set the values to |true| for doublesided printers and to
+		false for singlesided ones.
+		Issue a warning if no printers are found.
+globals  set:	 printer printers
+globals used:	 printer printers
+DOC
+#-------------------------------------------------------------------------------
+find_printers() {
+   [[ ${#printers[@]} -eq 0 ]] || return
+   # find current default printer:
+   printer=$(lpstat -d)
+   if [[ $printer =~ :\ (.*) ]]; then
+      printer=${BASH_REMATCH[1]}
+   else
+      printer=
+   fi
+   # find printers and their sidedness (makes each printer default in turn)
+   for i in $(lpstat -a  2>/dev/null |cut -d' ' -f1); do
+      printers["$i"]=$(lpoptions -d "$i" |
+	sed 's/.*sides=\([a-z]*\).*/\1/;s/one/false/;s/two/true/')
+   done
+   [[ -n "$printer" ]] && lpoptions -d $printer >/dev/null # restore defaultprinter
+   [[ ${#printers[@]} -eq 0 ]] && Warn "no printers found"
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= list_printers
+description:	List available printers and their sidedness; mark current
+		printer.
+globals  set:	 printers printer
+globals used:	 Blu Nor Red printers printer
+DOC
+#-------------------------------------------------------------------------------
+list_printers() {
+   local i j k c
+   echo "${Blu}Available printers:$Nor"
+   for i in "${!printers[@]}"; do 
+      j=doublesided
+      c=
+      k=
+      [[ $printer == "$i" ]] && k=' (current printer)' && c=$Red
+      ${printers[$i]} || j=singlesided
+      printf '      %s%s\t→ %s%s%s\n' "$c" "$i" "$j" "$k" "$Nor"
+   done
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= list_viewers 
+description:	List available viewers; mark current viewer
+globals  set:	 viewer viewers
+globals used:	 Blu Nor Red viewer viewers
+DOC
+#-------------------------------------------------------------------------------
+list_viewers() {
+   local i j k c
+   echo "${Blu}Available viewers:$Nor"
+   for i in "${!viewers[@]}"; do 
+      k=
+      c=
+      [[ $viewer == "$i" ]] && k=' (current viewer)' && c=$Red
+      printf '      %s%s\t→ %s%s%s\n' "$c" "$i" "${viewers[$i]}" "$k" "$Nor"
+   done
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+= clean_viewers 
+description:	Remove unavailable viewers, no messages
+globals  set:	 viewer viewers
+DOC
+#-------------------------------------------------------------------------------
+clean_viewers() {
+   local i
+   for i in "${!viewers[@]}"; do 
+      extest "${viewers[$i]%% *}" || {
+	 unset viewers["$i"]
+	 [[ $viewer == "$i" ]] && unset viewer
+      }
+   done
+}
+
+:<<'DOC' #----------------------------------------------------------------------
+description:	run the current viewer
+globals used:	 verbose viewers viewer
+DOC
+#-------------------------------------------------------------------------------
+run_viewer() {
+   $verbose && echo "running: ${viewers[$viewer]} main.pdf"
+   ${viewers[$viewer]} main.pdf &>/dev/null &
+}
+
+declare -A viewers printers
+    viewers=([ev]=evince [xp]=xpdf [gv]=gv [ac]=acroread)
+     viewer=ev
+      saved=false
+       view=true
+     prompt='vpp command (? for help): '
+    verbose=false
+      print=true
+      batch=
+   editexit=99
+compileexit=98
+    writeto=${VPPOUTDIR:=$(pwd)}
+	lpr=lpr
+    printer=
+     rcfile="$HOME/.vpprc"
+        Red='\e[38;5;1m' # red	       ]
+        Blu='\e[38;5;4m' # blue	       ]
+        Mag='\e[38;5;5m' # magenta     ]
+        Nor='\e[0m'      # reset color ]
+
+handle_options "$@"
+excheck getopt kpsewhich lpoptions lpr lpstat pdfinfo pdflatex \
+	ps2pdf texi2dvi texlog_extract
+clean_viewers
+find_printers
+check_viewers
+find_pdf
+pdfproperties
+
+[[ -n $batch ]] || $view || $print ||
+   die 'Nothing to do: use --view or --print or both'
+if $view; then
+   run_viewer
+fi
+if $print; then
+   printout
+else
+   wait
+fi
+# vim: set filetype=bash
