@@ -308,10 +308,8 @@ DOC
    Warn() { local i; for i; do echo -e "$Myname: $Mag$i$Nor"; done 1>&2; }
    warn() { $verbose && Warn "$@"; }
 helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
-helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed -n '1d;$d;p'|
-            less -Ps"$Myname-${Version/./·} documentation - type h for help, q to quit."
-		exit
-	  }
+helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
+            less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
 
 :<<'DOC' #----------------------------------------------------------------------
 = excheck
@@ -330,7 +328,7 @@ excheck() {
    $ok || die
    getopt -T 
    [[ $? -ne 4 ]] && die "Your getopt is not GNU"
-   i=$(texi2dvi --version|head -1|tr -cd [0-9])
+   i=$(texi2dvi --version|head -1|tr -cd '0-9')
    (( i >= 267 )) ||
       die "texi2dvi version ${i#2} is too old" \
           "get it here: ftp.gnu.org/gnu/texinfo/texi2dvi"
@@ -388,6 +386,7 @@ src() {
    fi
 }
 
+shopt -s extglob
 :<<'DOC' #----------------------------------------------------------------------
 = handle_options
 synopsis:	handle_options "$@"
@@ -397,7 +396,6 @@ globals  set:	 batch input mk print printer rcfile verbose view viewer
 globals used:	 Myname Version batch viewer viewers printers
 DOC
 #-------------------------------------------------------------------------------
-shopt -s extglob
 handle_options() {
    local options first=true
    if ! options=$(getopt \
@@ -894,7 +892,8 @@ find_printers() {
       printers["$i"]=$(lpoptions -d "$i" |
 	sed 's/.*sides=\([a-z]*\).*/\1/;s/one/false/;s/two/true/')
    done
-   [[ -n "$printer" ]] && lpoptions -d $printer >/dev/null # restore defaultprinter
+   [[ -n "$printer" ]] &&
+      lpoptions -d "$printer" >/dev/null # restore defaultprinter
    [[ ${#printers[@]} -eq 0 ]] && Warn "no printers found"
 }
 
@@ -1002,4 +1001,4 @@ if $print; then
 else
    wait
 fi
-# vim: set filetype=bash
+# vim: filetype=bash syn=sh
