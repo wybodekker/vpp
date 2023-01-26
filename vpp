@@ -1,5 +1,5 @@
 #!/bin/bash
-Version=3.08
+Version=3.09
 Myname="${0##*/}"
 
 :<<'DOC'
@@ -9,20 +9,20 @@ Myname="${0##*/}"
 vpp [options] [file]	
 
 Options:
--h,--help		print a help message and exit
--H,--Help		print print full documentation via less and exit
--V,--version		print version and exit
--b,--batch=STR		run in batch after running commands in STR
-   --view		view the document (this is the default)
-   --noview		do not view the document
-   --viewer=KEY		use pdf viewer named KEY
-   --print		offer printing interaction (this is the default)
-   --noprint		do not offer printing interaction
--p,--printer=KEY	print to printer named KEY
--v,--verbose		be verbose
-   --noverbose		don’t be verbose (this is the default)
--r,--rc[=STR]		use STRING as an rc file; if STR is absent, 
-			don’t read any rc file
+-h,--help	print a help message and exit
+-H,--Help	print print full documentation via less and exit
+-V,--version	print version and exit
+-b,--batch=X	run in batch using X as the print command
+   --view	view the document (this is the default)
+   --noview	do not view the document
+   --viewer=X	specifies X as the pdf viewer to use
+   --print	offer printing interaction (this is the default)
+   --noprint	do not offer printing interaction
+-p,--printer=X	print the printer named X
+-v,--verbose	be verbose
+   --noverbose	don’t be verbose (this is the default)
+-r,--rc=X	set rc file to X, must be the first option!
+		without the argument: don't read any rc-file
 
 Arguments for short options are given without a separator, so you can write
 either |--rc=myrc| or |-rmyrc|.
@@ -139,15 +139,15 @@ viewer		(string) set the viewer; arguments may be added; example:
 --verbose	
 	Prints messages about the progress vpp is making. Can be reverted
 	with |--noverbose|.
---rc=rc-file	
-	Read the specified |rc-file|, instead of the default rc-file, |~/.vpprc|.
+--rc=X	
+	Read the specified X, instead of the default rc-file, |~/.vpprc|.
 	If this option is used, it must be used before any other options.
 	If |rc-file| is an empty string, no rc-file will be read, thus skipping
 	reading of |~/.vpprc|.
---batch=string	
+--batch=X
 	Prevents the --print option to interrogate the user about pages to
 	be printed. Instead the document is printed according to the commands
-	in the mandatory |string|. Also sets viewing off. Thus the command
+	in the mandatory X. Also sets viewing off. Thus the command
 	
 	   vpp --batch '2-3 x3' test.pdf
 	
@@ -163,10 +163,10 @@ viewer		(string) set the viewer; arguments may be added; example:
 	|--noview|, normally used to suppress starting the viewer, for
 	example when using vpp from other scripts that generate PDF or
 	PostScript documents that have only to be printed.
---printer=key	
-	Specifies the printer to be used instead of the system default
+--printer=X	
+	Specifies the printer X to be used instead of the system default
 	printer. See the section /Printers and viewers/ for more information.
---viewer=[key|command]	
+--viewer=X	
 	Specifies the viewer to use. This script defines an associative
 	array |viewers| containing 4 viewers as follows:
 	
@@ -426,7 +426,7 @@ handle_options() {
 			  echo $Version
 			  exit
 			  ;;
-      (-b|--batch)        # run in batch using argument for print command
+      (-b|--batch)        # run in batch using X as the print command
 			  batch="$2"
 			  shift 2
 			  ;;
@@ -438,7 +438,7 @@ handle_options() {
 			  view=false
 			  shift
 			  ;;
-      (   --viewer)       # specifies the pdf viewer to use
+      (   --viewer)       # specifies X as the pdf viewer to use
 			  viewer="${2%% *}" # remove any viewer arguments
 			  extest "$viewer" ||
 			     die "specified viewer $viewer is not available"
@@ -453,7 +453,7 @@ handle_options() {
 			  print=false
 			  shift
 			  ;;
-      (-p|--printer)      # print to named printer
+      (-p|--printer)      # print the printer named X
 			  [[ -n ${printers["$2"]} ]] ||
 			     die "specified printer ($2) does not exist"
 			  printer="$2"
@@ -467,7 +467,8 @@ handle_options() {
 			  verbose=false
 			  shift
 			  ;;
-      (-r|--rc)		  # set rc file, but this must be the first option!
+      (-r|--rc)		  # set rc file to X, must be the first option!
+			  # without the argument: don't read any rc-file
 			  die 'the --rc option must be used before any other options'
 			  ;;
       (   --mk)           read -r -d '' mk <<-'EOD'
