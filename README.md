@@ -5,7 +5,7 @@
 |    type | bash
 |  author | Wybo Dekker
 |   email | wybo@dekkerdocumenten.nl
-| version | 3.08
+| version | 3.09
 | license | GNU General Public License
 
 vpp is a Bash script that displays a PDF or PostScript document (after
