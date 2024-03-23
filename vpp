@@ -670,6 +670,7 @@ ask_selection() {
 	 ;;
       (o*) # output to file instead of printer
 	 output=${c#o}
+	 output=${output%.pdf}
 	 if [[ -z $output ]]; then
 	    Warn 'filename must follow o without spacing'
 	    selection='continue'
@@ -806,11 +807,10 @@ printout() {
 :<<'DOC' #----------------------------------------------------------------------
 = doselection
 synopsis:	 doselection [odd|even]
-		no argument: if all pages,
-		odd if only the odd pages,
-		even if only the even pages to be printed
-description:	Make a selection of pdf pages and print it or output it to
-		pdf file.
+		no argument: print all pages,
+		odd: print only the odd pages,
+		even: print only the even pages
+description:	Make a selection of pdf pages and print it to printer or pdf
 globals  set:	 LATEX selection
 globals used:	 Mag Nor Red booklet height lpr lpropt output printer
 		 selection verbose width
