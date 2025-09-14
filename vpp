@@ -1,5 +1,5 @@
 #!/bin/bash
-Version=3.10
+Version=3.11
 Myname="${0##*/}"
 
 :<<'DOC'
@@ -226,12 +226,12 @@ selected printer is a non-duplex printer, printing will be performed in two
 shifts, one for the front side and one for the back side. Between the
 shifts, another prompt appears:
 
-   printer ready? then turn pack over the long side and type enter (^D skips)
+   printer ready? then turn pack over the short side and type enter (^D skips)
 
 You will have to arrange your printer such that, with the printed sides up, the
 first page printed will be at the bottom of the stack, and the last page printed
 will be on top. Normally you will then have your output come out the front of
-your printer. Rotate it over the long side of the paper and feed it back
+your printer. Rotate it over the short side of the paper and feed it back
 into the printer for the other side to be printed.
 
 When you use the |oxyz| subcommand, your selection will not be printed but
@@ -259,7 +259,7 @@ first 8 pages:
     $ man -t ls | vpp # (shows preview and is left with q)
     vpp command (? for help): a
     vpp command (? for help): b 1-8
-    printer ready? then turn pack over the long side and type enter (^D skips)
+    printer ready? then turn pack over the short side and type enter (^D skips)
     vpp command (? for help): q
     $
 
@@ -760,7 +760,7 @@ returns:	0
 DOC
 
 wait_for_printer() {
-   echo -n 'printer ready? then turn pack over the long side and' \
+   echo -n 'printer ready? then turn pack over the short side and' \
 	   'type enter (^D skips) '
    read -r </dev/tty || exit 0
 }
